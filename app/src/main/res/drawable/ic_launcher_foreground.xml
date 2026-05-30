@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Vinyl disc -->
+    <path android:pathData="M54,30 A24,24 0 1,1 53.99,30">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="54"
+                android:gradientRadius="24">
+                <item android:color="#FF1A1A2E" android:offset="0.0" />
+                <item android:color="#FF2D2D44" android:offset="0.3" />
+                <item android:color="#FF1A1A2E" android:offset="0.6" />
+                <item android:color="#FF3D3D5C" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Disc grooves -->
+    <path
+        android:pathData="M54,38 A16,16 0 1,1 53.99,38"
+        android:strokeWidth="0.5"
+        android:strokeColor="#20FFFFFF"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M54,42 A12,12 0 1,1 53.99,42"
+        android:strokeWidth="0.4"
+        android:strokeColor="#15FFFFFF"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M54,34 A20,20 0 1,1 53.99,34"
+        android:strokeWidth="0.4"
+        android:strokeColor="#15FFFFFF"
+        android:fillColor="#00000000" />
+
+    <!-- Center hole -->
+    <path
+        android:pathData="M54,50 A4,4 0 1,1 53.99,50"
+        android:fillColor="#FF302B63" />
+
+    <!-- Music note -->
+    <path
+        android:fillColor="#FFFF5722"
+        android:pathData="M56,40v16c-0.8,-0.5 -1.8,-0.8 -2.8,-0.8c-2.5,0 -4.5,1.8 -4.5,4c0,2.2 2,4 4.5,4s4.5,-1.8 4.5,-4V44.5h5V40H56z" />
+
+    <!-- Sound wave arcs (right side) -->
+    <path
+        android:pathData="M70,47 A10,10 0 0,1 70,61"
+        android:strokeWidth="2"
+        android:strokeColor="#80FF5722"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M75,43 A15,15 0 0,1 75,65"
+        android:strokeWidth="1.5"
+        android:strokeColor="#50FF5722"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M80,39 A20,20 0 0,1 80,69"
+        android:strokeWidth="1"
+        android:strokeColor="#30FF5722"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round" />
+
+</vector>

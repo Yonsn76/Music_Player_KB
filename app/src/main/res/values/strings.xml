@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kb Music</string>
+    <string name="no_songs">No se encontraron canciones</string>
+    <string name="permission_needed">Se necesita permiso para leer tu música</string>
+    <string name="play">Reproducir</string>
+    <string name="prev">Anterior</string>
+    <string name="next">Siguiente</string>
+    <string name="shuffle">Aleatorio</string>
+    <string name="shuffle_on">Aleatorio activado</string>
+    <string name="shuffle_off">Aleatorio desactivado</string>
+    <string name="search">Buscar</string>
+    <string name="search_hint">Buscar canción o artista&#8230;</string>
+    <string name="no_results">No se encontraron resultados</string>
+    <string name="songs_count">%1$d canciones</string>
+    <string name="initial_time">0:00</string>
+</resources>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Backgrounds (Default Dark) -->
+    <color name="canvas_bone">#111111</color>
+    <color name="surface_white">#1A1A1A</color>
+
+    <!-- Typography (Default Cream) -->
+    <color name="text_charcoal">#F2EBD9</color>
+    <color name="text_muted">#807E7B</color>
+
+    <!-- Structure -->
+    <color name="border_light">#333333</color>
+
+    <!-- Accents -->
+    <color name="accent_pale_blue">#1B2B34</color>
+    <color name="accent_pale_blue_text">#7FBBD9</color>
+
+    <!-- Specific Components -->
+    <color name="play_button_bg">#000000</color>
+    <color name="play_button_icon">#F2EBD9</color>
+</resources>

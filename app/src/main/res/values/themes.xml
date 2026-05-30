@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Kb" parent="Theme.AppCompat.NoActionBar">
+        <item name="colorPrimary">@color/surface_white</item>
+        <item name="colorPrimaryDark">@color/canvas_bone</item>
+        <item name="colorAccent">@color/text_charcoal</item>
+        <item name="android:statusBarColor">@color/canvas_bone</item>
+        <item name="android:navigationBarColor">@color/canvas_bone</item>
+        <item name="android:windowBackground">@color/canvas_bone</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.Kb.Splash" parent="Theme.Kb">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+</resources>
