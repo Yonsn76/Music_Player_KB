@@ -14,4 +14,9 @@
     <string name="no_results">No se encontraron resultados</string>
     <string name="songs_count">%1$d canciones</string>
     <string name="initial_time">0:00</string>
+    <string name="select_folder">Seleccionar Carpeta</string>
+    <string name="folders_title">Importaciones</string>
+    <string name="no_folders">No hay carpetas importadas</string>
+    <string name="folder_removed">Carpeta eliminada</string>
+    <string name="refresh">Actualizar</string>
 </resources>

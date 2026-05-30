@@ -33,7 +33,6 @@ class SongsAdapter(
         tvTitle.text = song.title
         tvArtist.text = song.artist
         tvDuration.text = formatDuration(song.duration)
-
         view.setBackgroundResource(R.drawable.bg_glass_item)
         if (isPlaying) {
             tvNumber.text = "→"

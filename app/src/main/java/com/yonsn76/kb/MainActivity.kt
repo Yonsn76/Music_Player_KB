@@ -1,27 +1,31 @@
 package com.yonsn76.kb
 
 import android.Manifest
-import android.content.ContentUris
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.MediaStore
+import android.provider.DocumentsContract
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.widget.addTextChangedListener
+import android.media.MediaMetadataRetriever
 
 class MainActivity : AppCompatActivity() {
 
@@ -42,8 +46,22 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnPlay: ImageButton
     private lateinit var btnShuffle: ImageButton
     private lateinit var btnShufflePlayer: ImageButton
+    private lateinit var btnFolder: ImageButton
     private lateinit var seekBar: SeekBar
+    private lateinit var pbLoading: ProgressBar
     private lateinit var adapter: SongsAdapter
+
+    private val selectFolderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let {
+            contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (!PlaybackManager.folderUris.contains(it)) {
+                PlaybackManager.folderUris.add(it)
+                saveFolders()
+                loadFolderIncremental(it)
+                PlaybackManager.saveSongs(this)
+            }
+        }
+    }
 
     private val handler = Handler(Looper.getMainLooper())
     private val updateSeekBar = object : Runnable {
@@ -78,27 +96,25 @@ class MainActivity : AppCompatActivity() {
         btnPlay = findViewById(R.id.btnPlay)
         btnShuffle = findViewById(R.id.btnShuffle)
         btnShufflePlayer = findViewById(R.id.btnShufflePlayer)
+        btnFolder = findViewById(R.id.btnFolder)
         seekBar = findViewById(R.id.seekBar)
+        pbLoading = findViewById(R.id.pbLoading)
 
         val btnPrev = findViewById<ImageButton>(R.id.btnPrev)
         val btnNext = findViewById<ImageButton>(R.id.btnNext)
 
-        lvSongs.setOnItemClickListener { _, _, position, _ ->
-            playSong(position)
-        }
-
-        btnPlay.setOnClickListener { togglePlayPause() }
-        btnPrev.setOnClickListener { playPrev() }
-        btnNext.setOnClickListener { playNext() }
-
-        val shuffleClick = View.OnClickListener { toggleShuffle() }
+        lvSongs.setOnItemClickListener { _, _, position, _ -> PlaybackManager.playSong(this, position) }
+        btnPlay.setOnClickListener { PlaybackManager.togglePlayPause(this) }
+        btnPrev.setOnClickListener { PlaybackManager.playPrev(this) }
+        btnNext.setOnClickListener { PlaybackManager.playNext(this) }
+        
+        val shuffleClick = View.OnClickListener { PlaybackManager.toggleShuffle(this) }
         btnShuffle.setOnClickListener(shuffleClick)
         btnShufflePlayer.setOnClickListener(shuffleClick)
 
+        btnFolder.setOnClickListener { showFoldersDialog() }
         btnSearch.setOnClickListener { toggleSearch() }
-        etSearch.addTextChangedListener { text ->
-            filterSongs(text.toString())
-        }
+        etSearch.addTextChangedListener { text -> filterSongs(text.toString()) }
 
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -111,16 +127,56 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(sb: SeekBar?) {}
         })
 
+        PlaybackManager.onStateChanged = { updateUI() }
+        loadFolders()
         checkPermissionAndLoad()
+        updateUI()
     }
 
-    private fun toggleShuffle() {
-        PlaybackManager.isShuffle = !PlaybackManager.isShuffle
-        val icon = if (PlaybackManager.isShuffle) R.drawable.ic_shuffle_on else R.drawable.ic_shuffle
-        btnShuffle.setImageResource(icon)
-        btnShufflePlayer.setImageResource(icon)
-        val msg = if (PlaybackManager.isShuffle) R.string.shuffle_on else R.string.shuffle_off
-        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    private fun updateUI() {
+        if (PlaybackManager.currentIndex != -1) {
+            val song = PlaybackManager.filteredSongs[PlaybackManager.currentIndex]
+            playerBar.visibility = View.VISIBLE
+            tvNowTitle.text = song.title
+            tvNowArtist.text = song.artist
+            btnPlay.setImageResource(if (PlaybackManager.isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
+            
+            val icon = if (PlaybackManager.isShuffle) R.drawable.ic_shuffle_on else R.drawable.ic_shuffle
+            btnShuffle.setImageResource(icon)
+            btnShufflePlayer.setImageResource(icon)
+
+            if (::adapter.isInitialized) {
+                adapter.currentPlayingIndex = PlaybackManager.currentIndex
+                adapter.notifyDataSetChanged()
+            }
+
+            val duration = PlaybackManager.mediaPlayer?.duration ?: 0
+            seekBar.max = duration
+            tvTotalTime.text = formatTime(duration)
+            handler.post(updateSeekBar)
+        }
+    }
+
+    private fun saveFolders() {
+        val prefs = getSharedPreferences("KbPrefs", MODE_PRIVATE)
+        val uriStrings = PlaybackManager.folderUris.map { it.toString() }.toSet()
+        prefs.edit { putStringSet("imported_folders", uriStrings) }
+    }
+
+    private fun loadFolders() {
+        val prefs = getSharedPreferences("KbPrefs", MODE_PRIVATE)
+        val uriStrings = prefs.getStringSet("imported_folders", null)
+        uriStrings?.forEach {
+            try {
+                val uri = Uri.parse(it)
+                if (!PlaybackManager.folderUris.contains(uri)) PlaybackManager.folderUris.add(uri)
+            } catch (_: Exception) {}
+        }
+        if (!PlaybackManager.loadSongs(this) && PlaybackManager.folderUris.isNotEmpty()) {
+            loadAllSongs()
+        } else {
+            filterSongs("")
+        }
     }
 
     private fun toggleSearch() {
@@ -143,17 +199,111 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun filterSongs(query: String) {
-        PlaybackManager.filteredSongs.clear()
-        if (query.isEmpty()) {
-            PlaybackManager.filteredSongs.addAll(PlaybackManager.allSongs)
-        } else {
-            val lowerQuery = query.lowercase()
-            PlaybackManager.allSongs.filterTo(PlaybackManager.filteredSongs) {
-                it.title.lowercase().contains(lowerQuery) || it.artist.lowercase().contains(lowerQuery)
+    private fun scanDocument(uri: Uri, sourceFolderUri: Uri) {
+        val treeId = DocumentsContract.getTreeDocumentId(uri)
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(uri, treeId)
+        contentResolver.query(childrenUri, arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            val typeCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+            val nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            while (cursor.moveToNext()) {
+                val docId = cursor.getString(idCol)
+                val mime = cursor.getString(typeCol)
+                val name = cursor.getString(nameCol)
+                val fileUri = DocumentsContract.buildDocumentUriUsingTree(uri, docId)
+                if (DocumentsContract.Document.MIME_TYPE_DIR == mime) scanDocumentRecursive(uri, docId, sourceFolderUri)
+                else if (mime.startsWith("audio/")) addSongFromUri(fileUri, name, sourceFolderUri)
             }
         }
+    }
 
+    private fun scanDocumentRecursive(parentUri: Uri, docId: String, sourceFolderUri: Uri) {
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(parentUri, docId)
+        contentResolver.query(childrenUri, arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            val typeCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+            val nameCol = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            while (cursor.moveToNext()) {
+                val nextDocId = cursor.getString(idCol)
+                val mime = cursor.getString(typeCol)
+                val name = cursor.getString(nameCol)
+                val fileUri = DocumentsContract.buildDocumentUriUsingTree(parentUri, nextDocId)
+                if (DocumentsContract.Document.MIME_TYPE_DIR == mime) scanDocumentRecursive(parentUri, nextDocId, sourceFolderUri)
+                else if (mime.startsWith("audio/")) addSongFromUri(fileUri, name, sourceFolderUri)
+            }
+        }
+    }
+
+    private fun addSongFromUri(uri: Uri, fileName: String, sourceFolderUri: Uri) {
+        var title = fileName
+        var artist = "Carpeta Local"
+        var duration = 0L
+        val mmr = MediaMetadataRetriever()
+        try {
+            mmr.setDataSource(this, uri)
+            title = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: fileName
+            artist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: "Desconocido"
+            duration = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
+        } catch (_: Exception) {} finally { mmr.release() }
+        PlaybackManager.allSongs.add(Song(System.currentTimeMillis() + PlaybackManager.allSongs.size, title, artist, duration, uri, sourceFolderUri))
+    }
+
+    private fun showFoldersDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_folders, null)
+        val lvFolders = dialogView.findViewById<ListView>(R.id.lvFolders)
+        val btnAdd = dialogView.findViewById<ImageButton>(R.id.btnAddFolder)
+        val tvNoFolders = dialogView.findViewById<TextView>(R.id.tvNoFolders)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this).setView(dialogView).create()
+        lvFolders.adapter = FoldersAdapter(this, PlaybackManager.folderUris, 
+            onRefresh = { uri -> refreshFolder(uri) },
+            onRemove = { uri ->
+                PlaybackManager.folderUris.remove(uri)
+                saveFolders()
+                PlaybackManager.allSongs.removeAll { it.folderUri == uri }
+                PlaybackManager.saveSongs(this)
+                filterSongs("")
+                if (PlaybackManager.folderUris.isEmpty()) tvNoFolders.visibility = View.VISIBLE
+                (lvFolders.adapter as FoldersAdapter).notifyDataSetChanged()
+            }
+        )
+        tvNoFolders.visibility = if (PlaybackManager.folderUris.isEmpty()) View.VISIBLE else View.GONE
+        btnAdd.setOnClickListener { dialog.dismiss(); selectFolderLauncher.launch(null) }
+        dialog.show()
+    }
+
+    private fun loadAllSongs() {
+        pbLoading.visibility = View.VISIBLE
+        Thread {
+            PlaybackManager.allSongs.clear()
+            PlaybackManager.folderUris.forEach { scanDocument(it, it) }
+            runOnUiThread { pbLoading.visibility = View.GONE; filterSongs(""); PlaybackManager.saveSongs(this) }
+        }.start()
+    }
+
+    private fun loadFolderIncremental(folderUri: Uri) {
+        pbLoading.visibility = View.VISIBLE
+        Thread {
+            scanDocument(folderUri, folderUri)
+            runOnUiThread { pbLoading.visibility = View.GONE; filterSongs(""); PlaybackManager.saveSongs(this) }
+        }.start()
+    }
+
+    private fun refreshFolder(folderUri: Uri) {
+        pbLoading.visibility = View.VISIBLE
+        Thread {
+            PlaybackManager.allSongs.removeAll { it.folderUri == folderUri }
+            scanDocument(folderUri, folderUri)
+            runOnUiThread { pbLoading.visibility = View.GONE; filterSongs(""); PlaybackManager.saveSongs(this) }
+        }.start()
+    }
+
+    private fun filterSongs(query: String) {
+        PlaybackManager.filteredSongs.clear()
+        if (query.isEmpty()) PlaybackManager.filteredSongs.addAll(PlaybackManager.allSongs)
+        else {
+            val lowerQuery = query.lowercase()
+            PlaybackManager.allSongs.filterTo(PlaybackManager.filteredSongs) { it.title.lowercase().contains(lowerQuery) || it.artist.lowercase().contains(lowerQuery) }
+        }
         if (PlaybackManager.filteredSongs.isEmpty()) {
             tvEmpty.visibility = View.VISIBLE
             tvEmpty.setText(if (query.isEmpty()) R.string.no_songs else R.string.no_results)
@@ -165,164 +315,45 @@ class MainActivity : AppCompatActivity() {
             if (!::adapter.isInitialized) {
                 adapter = SongsAdapter(this, PlaybackManager.filteredSongs)
                 lvSongs.adapter = adapter
-            } else {
-                adapter.notifyDataSetChanged()
-            }
+            } else adapter.notifyDataSetChanged()
             tvSongCount.text = getString(R.string.songs_count, PlaybackManager.filteredSongs.size)
             tvSongCount.visibility = View.VISIBLE
         }
     }
 
     private fun checkPermissionAndLoad() {
-        val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-            Manifest.permission.READ_MEDIA_AUDIO
-        else
-            Manifest.permission.READ_EXTERNAL_STORAGE
-
-        if (ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED) {
-            loadSongs()
+        val permissions = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.READ_MEDIA_AUDIO)
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            ActivityCompat.requestPermissions(this, arrayOf(perm), 1)
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+
+        val toRequest = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (toRequest.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, toRequest.toTypedArray(), 1)
         }
     }
 
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
         super.onRequestPermissionsResult(code, perms, results)
-        if (code == 1 && results.isNotEmpty() && results[0] == PackageManager.PERMISSION_GRANTED) {
-            loadSongs()
-        } else {
-            Toast.makeText(this, R.string.permission_needed, Toast.LENGTH_LONG).show()
-            tvEmpty.visibility = View.VISIBLE
-            tvEmpty.setText(R.string.permission_needed)
-        }
-    }
-
-    private fun loadSongs() {
-        PlaybackManager.allSongs.clear()
-
-        val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.IS_MUSIC
-        )
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
-
-        contentResolver.query(uri, projection, selection, null, sortOrder)?.use { cursor ->
-            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idCol)
-                val title = cursor.getString(titleCol)
-                val artist = cursor.getString(artistCol) ?: "Desconocido"
-                val duration = cursor.getLong(durationCol)
-                val contentUri = ContentUris.withAppendedId(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id
-                )
-                PlaybackManager.allSongs.add(Song(id, title, artist, duration, contentUri))
-            }
-        }
-        filterSongs("")
-    }
-
-    private fun playSong(index: Int) {
-        if (index < 0 || index >= PlaybackManager.filteredSongs.size) return
-
-        PlaybackManager.mediaPlayer?.release()
-        PlaybackManager.currentIndex = index
-        val song = PlaybackManager.filteredSongs[index]
-
-        PlaybackManager.mediaPlayer = MediaPlayer().apply {
-            setDataSource(this@MainActivity, song.uri)
-            prepare()
-            start()
-            setOnCompletionListener { playNext() }
-        }
-
-        PlaybackManager.isPlaying = true
-        playerBar.visibility = View.VISIBLE
-        tvNowTitle.text = song.title
-        tvNowArtist.text = song.artist
-        btnPlay.setImageResource(R.drawable.ic_pause)
-
-        // Reset search if open
-        if (isSearchOpen) toggleSearch()
-
-        if (::adapter.isInitialized) {
-            adapter.currentPlayingIndex = index
-            adapter.notifyDataSetChanged()
-        }
-
-        val duration = PlaybackManager.mediaPlayer?.duration ?: 0
-        seekBar.max = duration
-        tvTotalTime.text = formatTime(duration)
-        tvCurrentTime.text = getString(R.string.initial_time)
-        handler.post(updateSeekBar)
-    }
-
-    private fun togglePlayPause() {
-        PlaybackManager.mediaPlayer?.let { mp ->
-            if (mp.isPlaying) {
-                mp.pause()
-                PlaybackManager.isPlaying = false
-                btnPlay.setImageResource(R.drawable.ic_play)
-            } else {
-                mp.start()
-                PlaybackManager.isPlaying = true
-                btnPlay.setImageResource(R.drawable.ic_pause)
-                handler.post(updateSeekBar)
-            }
-        }
-    }
-
-    private fun playNext() {
-        if (PlaybackManager.filteredSongs.isEmpty()) return
-        val next = if (PlaybackManager.isShuffle) {
-            var r: Int
-            do { r = (PlaybackManager.filteredSongs.indices).random() } while (r == PlaybackManager.currentIndex && PlaybackManager.filteredSongs.size > 1)
-            r
-        } else {
-            if (PlaybackManager.currentIndex + 1 >= PlaybackManager.filteredSongs.size) 0 else PlaybackManager.currentIndex + 1
-        }
-        playSong(next)
-    }
-
-    private fun playPrev() {
-        if (PlaybackManager.filteredSongs.isEmpty()) return
-        PlaybackManager.mediaPlayer?.let {
-            if (it.currentPosition > 3000) {
-                it.seekTo(0)
-                seekBar.progress = 0
-                tvCurrentTime.text = getString(R.string.initial_time)
-                return
-            }
-        }
-        val prev = if (PlaybackManager.isShuffle) {
-            (PlaybackManager.filteredSongs.indices).random()
-        } else {
-            if (PlaybackManager.currentIndex - 1 < 0) PlaybackManager.filteredSongs.size - 1 else PlaybackManager.currentIndex - 1
-        }
-        playSong(prev)
+        if (code == 1 && results.isNotEmpty() && results[0] == PackageManager.PERMISSION_GRANTED && PlaybackManager.allSongs.isEmpty()) loadAllSongs()
     }
 
     private fun formatTime(ms: Int): String {
         val totalSec = ms / 1000
-        val min = totalSec / 60
-        val sec = totalSec % 60
-        return "%d:%02d".format(min, sec)
+        return "%d:%02d".format(totalSec / 60, totalSec % 60)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(updateSeekBar)
-        // Only release if the activity is finishing and not just recreating
         if (isFinishing) {
+            stopService(Intent(this, MusicService::class.java))
             PlaybackManager.release()
         }
     }
