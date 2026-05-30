@@ -18,12 +18,11 @@ local.properties
 captures/
 *.log
 
-# Output files
-KbMusic.apk
-*.apk
+# Output files (Ignored by default, except the release folder)
 *.aar
 *.jar
 *.bundle
+!release/*.apk
 
 # Generated files
 /app/build/
