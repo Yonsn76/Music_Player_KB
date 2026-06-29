@@ -2,8 +2,8 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/canvas_bone" />
     <item
-        android:drawable="@drawable/ic_launcher_foreground"
+        android:drawable="@mipmap/ic_launcher"
         android:gravity="center"
-        android:width="160dp"
-        android:height="160dp" />
+        android:width="180dp"
+        android:height="180dp" />
 </layer-list>
